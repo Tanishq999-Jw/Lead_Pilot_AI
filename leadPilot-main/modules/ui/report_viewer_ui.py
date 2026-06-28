@@ -1,0 +1,493 @@
+"""
+report_viewer_ui.py
+View Intelligence Reports — Lead report viewer with interactive AI Outreach Generator.
+"""
+import streamlit as st
+from datetime import datetime
+from config.database import SessionLocal
+from modules.database.models import Lead, AnalysisJob, AnalysisReport
+from modules.analysis.job_processor import get_report, queue_analysis_job
+from modules.ui.theme import page_header, empty_state
+
+# ─────────────────────────────────────────────
+# Constants
+# ─────────────────────────────────────────────
+EMAIL_TYPES = [
+    "Cold Outreach",
+    "Follow-up 1",
+    "Follow-up 2",
+    "No Website Pitch",
+    "Website Redesign Pitch",
+    "SEO Pitch",
+    "App/Booking System Pitch",
+    "AI Chatbot/Automation Pitch",
+]
+
+TONES = ["Professional", "Friendly", "Direct", "Consultative"]
+LENGTHS = ["Short (80-100 words)", "Medium (100-140 words)"]
+CTA_GOALS = ["Get Reply", "Book a Call", "Offer Free Audit", "Share Improvement Suggestions"]
+
+
+# ─────────────────────────────────────────────
+# Main Viewer
+# ─────────────────────────────────────────────
+def render_report_viewer():
+    page_header(
+        "📄",
+        "View Intelligence Reports",
+        "Review AI-generated sales reports and manage personalized outreach for each lead.",
+    )
+
+    db = SessionLocal()
+    try:
+        from modules.database.repositories import CampaignRepository
+        campaigns = CampaignRepository(db).get_all()
+        if not campaigns:
+            empty_state("📋", "No Campaigns", "Create a campaign first.")
+            return
+
+        camp_options = {c.id: c.campaign_name for c in campaigns}
+        selected_camp_id = st.selectbox(
+            "🎯 Select Campaign",
+            options=list(camp_options.keys()),
+            format_func=lambda x: camp_options[x],
+            key="report_viewer_campaign",
+        )
+
+        leads = db.query(Lead).filter(Lead.campaign_id == selected_camp_id).all()
+        if not leads:
+            empty_state("👥", "No Leads", "No leads found for this campaign.")
+            return
+
+        jobs = (
+            db.query(AnalysisJob)
+            .filter(AnalysisJob.lead_id.in_([l.id for l in leads]))
+            .all()
+        )
+        job_map = {j.lead_id: j for j in jobs}
+        analyzed_leads = [l for l in leads if job_map.get(l.id)]
+
+        if not analyzed_leads:
+            empty_state(
+                "⏳",
+                "No Analyzed Leads",
+                "Go to '🧠 Lead Intelligence' to queue leads for analysis first.",
+            )
+            return
+
+        lead_options = {
+            l.id: f"{l.business_name}  [{job_map[l.id].status}]"
+            for l in analyzed_leads
+        }
+
+        selected_lead_id = st.selectbox(
+            "🔍 Select a lead to review:",
+            options=list(lead_options.keys()),
+            format_func=lambda x: lead_options[x],
+        )
+
+        if selected_lead_id:
+            lead = db.query(Lead).filter(Lead.id == selected_lead_id).first()
+            job = job_map.get(selected_lead_id)
+            report = get_report(db, selected_lead_id)
+
+            st.markdown(f"### 📄 Intelligence Dashboard — {lead.business_name}")
+
+            if job.status == "PENDING":
+                st.warning("⏳ Job is queued. Waiting for an open slot...")
+            elif job.status == "RUNNING":
+                from datetime import datetime
+                started = job.started_at
+                elapsed = "-"
+                if started:
+                    delta = datetime.utcnow() - started
+                    mins = int(delta.total_seconds() // 60)
+                    secs = int(delta.total_seconds() % 60)
+                    elapsed = f"{mins}m {secs}s"
+
+                st.info(f"⚙️ Analysis engine is currently auditing the website... (Started: {started} • Elapsed: {elapsed})")
+                col1, col2, col3 = st.columns([1,1,1])
+                with col1:
+                    if st.button("🔄 Refresh Status"):
+                        st.rerun()
+                with col2:
+                    if st.button("Mark as Failed"):
+                        try:
+                            job_db = db.query(AnalysisJob).filter(AnalysisJob.id == job.id).first()
+                            job_db.status = "FAILED"
+                            job_db.error_message = "Marked failed by user"
+                            job_db.completed_at = datetime.utcnow()
+                            db.commit()
+                            st.success("Marked job as FAILED")
+                            st.rerun()
+                        except Exception as e:
+                            db.rollback()
+                            st.error(f"Failed to mark job failed: {e}")
+                with col3:
+                    if st.button("Retry Job"):
+                        try:
+                            queued = queue_analysis_job(db, selected_lead_id)
+                            if queued:
+                                st.success("Retry queued")
+                                st.rerun()
+                            else:
+                                st.info("A pending or running job already exists for this lead.")
+                        except Exception as e:
+                            st.error(f"Failed to retry job: {e}")
+            elif job.status == "FAILED":
+                st.error(f"❌ Analysis failed: {job.error_message}")
+                if st.button("Retry Job"):
+                    try:
+                        queued = queue_analysis_job(db, selected_lead_id)
+                        if queued:
+                            st.success("Retry queued")
+                            st.rerun()
+                        else:
+                            st.info("A pending or running job already exists for this lead.")
+                    except Exception as e:
+                        st.error(f"Failed to retry job: {e}")
+            elif job.status == "COMPLETED" and report:
+                render_report_details(db, lead, report)
+            elif job.status == "COMPLETED" and not report:
+                st.error("⚠️ Job completed but report was not found in the database.")
+                
+    except Exception as e:
+        db.rollback()
+        st.error("⚠️ Database connection issue. Please refresh or try again.")
+        st.exception(e)
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────
+# Report Details (Tabs)
+# ─────────────────────────────────────────────
+def render_report_details(db, lead: Lead, report: AnalysisReport):
+    # Top metrics row
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🏥 Digital Health Score", f"{report.overall_score}/100")
+    c2.metric("🎯 Opportunity Score", f"{report.opportunity_score}/100")
+
+    level = report.opportunity_level or "Unknown"
+    color = (
+        "green" if level in ["Very High", "High"]
+        else "orange" if level == "Medium"
+        else "gray"
+    )
+    c3.markdown(
+        f"**Opportunity Level:**<br>"
+        f"<span style='color:{color}; font-weight:bold; font-size:1.5rem;'>{level}</span>",
+        unsafe_allow_html=True,
+    )
+
+    if not report.has_website:
+        st.warning("⚠️ No website detected for this business. Pitch website development.")
+
+    st.markdown("---")
+
+    tabs = st.tabs([
+        "📊 Executive Report",
+        "💔 Pain Points & Services",
+        "✉️ AI Outreach Generator",
+        "🔍 Raw Audit Data",
+    ])
+
+    ai_data = report.ai_report_json or {}
+
+    # ── Tab 0: Executive Report ──────────────────
+    with tabs[0]:
+        _render_executive_tab(ai_data)
+
+    # ── Tab 1: Pain Points & Services ───────────
+    with tabs[1]:
+        _render_pain_points_tab(report)
+
+    # ── Tab 2: Interactive Outreach Generator ────
+    with tabs[2]:
+        _render_outreach_tab(db, lead, report, ai_data)
+
+    # ── Tab 3: Raw Audit Data ────────────────────
+    with tabs[3]:
+        st.json(report.raw_audit_json or {})
+
+
+# ─────────────────────────────────────────────
+# Tab Renderers
+# ─────────────────────────────────────────────
+def _render_executive_tab(ai_data: dict):
+    if not ai_data:
+        st.info("Executive report is not yet available.")
+        return
+
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        st.markdown("### 📋 Executive Summary")
+        st.write(ai_data.get("executive_summary", "—"))
+
+        st.markdown("### 💡 Business Impact")
+        st.info(ai_data.get("business_impact_summary", "No impact summary available."))
+
+        st.markdown("### 🗣️ Main Pitch Angle")
+        st.success(f"**Pitch:** {ai_data.get('main_pitch_angle', '—')}")
+
+    with col_b:
+        st.markdown("### 📞 Sales Call Notes")
+        notes = ai_data.get("sales_call_notes", [])
+        if notes:
+            for note in notes:
+                st.markdown(f"✅ {note}")
+        else:
+            st.write("No specific notes generated.")
+
+        tech = ai_data.get("technical_summary", {})
+        if tech:
+            st.markdown("### ⚙️ Technical TL;DR")
+            for issue in tech.get("main_technical_issues", []):
+                st.markdown(f"- {issue}")
+
+
+def _render_pain_points_tab(report: AnalysisReport):
+    st.markdown("### 🔴 Detected Pain Points")
+    pps = report.pain_points_json or []
+    if not pps:
+        st.info("No pain points were detected for this lead.")
+    else:
+        for pp in pps:
+            sev = str(pp.get("severity", "")).capitalize()
+            icon = "🔴" if sev == "Critical" else "🟠" if sev == "High" else "🟡"
+            with st.expander(
+                f"{icon} {pp.get('title')} ({sev})",
+                expanded=(sev in ["Critical", "High"]),
+            ):
+                st.write(f"**Evidence:** {pp.get('evidence', '—')}")
+                st.write(f"**Business Impact:** {pp.get('business_impact', '—')}")
+                rec = pp.get("recommended_service")
+                if rec:
+                    st.caption(f"💡 Recommended Service: {rec}")
+
+    st.markdown("---")
+    st.markdown("### ✅ Recommended Solutions")
+    recs = report.recommended_services_json or []
+    if not recs:
+        st.info("No specific services recommended.")
+    else:
+        for rec in recs:
+            pri = rec.get("priority", "")
+            pri_color = (
+                "🔴" if pri == "High" else "🟠" if pri == "Medium" else "🟢"
+            )
+            st.markdown(f"#### {pri_color} {rec.get('service_name')} — Priority: {pri}")
+            st.markdown(f"**Why they need it:** {rec.get('reason', '—')}")
+            st.markdown(f"**How to pitch it:** {rec.get('pitch_angle', '—')}")
+            st.divider()
+
+
+def _render_outreach_tab(db, lead: Lead, report: AnalysisReport, ai_data: dict):
+    st.markdown("### ✉️ AI Outreach Generator")
+
+    # 5. Show warning if report or ai_report_json is missing
+    if not report or not report.ai_report_json:
+        st.warning("⚠️ Analysis report is missing. Please run Lead Intelligence Analysis first.")
+        return
+
+    from modules.database.repositories import OutreachMessageRepository
+    from modules.analysis.outreach_generator import generate_outreach
+
+    # Load latest outreach from DB if present
+    repo = OutreachMessageRepository(db)
+    latest = repo.get_latest_for_lead(lead.id)
+
+    # 6. Detect weak legacy emails under 80 words and automatically regenerate
+    if latest and latest.email_body:
+        core_body = latest.email_body
+        if "\n\nBest regards," in core_body:
+            core_body = core_body.split("\n\nBest regards,")[0]
+        word_count = len(core_body.strip().split())
+        if word_count < 80:
+            import logging
+            logger = logging.getLogger("leadpilot")
+            logger.info(f"Loaded outreach message is weak ({word_count} words). Forcing automatic regeneration.")
+            latest = None
+
+    # ── Automatic Generation if not present ───────
+    if not latest:
+        with st.spinner("🤖 Automatically generating outreach based on the report..."):
+            try:
+                result = generate_outreach(
+                    report=report,
+                    lead=lead,
+                    email_type="Cold Outreach",
+                    tone="Professional",
+                    length="Short",
+                    cta_goal="Get Reply",
+                    service_focus="Auto (from report)",
+                )
+
+                if "error" not in result:
+                    # Automatically save to OutreachMessageRepository
+                    latest = repo.create(
+                        lead_id=lead.id,
+                        report_id=report.id,
+                        email_type="Cold Outreach",
+                        tone="Professional",
+                        length="Short",
+                        cta_goal="Get Reply",
+                        service_focus="Auto (from report)",
+                        subject_lines=result.get("subject_lines", []),
+                        email_body=result.get("email_body", ""),
+                        whatsapp_message="",
+                        linkedin_message="",
+                        follow_up_1="",
+                        follow_up_2="",
+                    )
+
+                    st.success("✅ Outreach generated and saved automatically!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Auto-generation failed: {result['error']}")
+                    return
+            except Exception as e:
+                st.error(f"❌ Auto-generation failed: {e}")
+                return
+
+    # Once loaded or automatically generated, we put it in st.session_state
+    result = st.session_state.get(f"outreach_result_{lead.id}")
+    if not result:
+        result = {
+            "subject_lines": latest.subject_lines or [],
+            "email_body": latest.email_body or "",
+            "_db_id": latest.id,
+        }
+        st.session_state[f"outreach_result_{lead.id}"] = result
+
+    if not result:
+        st.info("No outreach messages available.")
+        return
+
+    st.markdown("---")
+
+    # ── Email Section ────────────────────────────
+    st.markdown("#### 📧 Email Draft")
+
+    subjects = result.get("subject_lines", [])
+    if subjects:
+        selected_subject = st.selectbox(
+            "📌 Select Subject Line",
+            subjects,
+            key=f"subj_{lead.id}",
+        )
+    else:
+        selected_subject = st.text_input("📌 Subject Line", value="", key=f"subj_{lead.id}")
+
+    edited_body = st.text_area(
+        "Email Body",
+        value=result.get("email_body", ""),
+        height=220,
+        key=f"body_{lead.id}",
+        label_visibility="collapsed",
+    )
+
+    # ── Quick-Edit Buttons ───────────────────────
+    st.markdown("**✏️ Quick Edits:**")
+    qe1, qe2, qe3, qe4 = st.columns(4)
+
+    def _apply_modifier_action(modifier_key: str):
+        from modules.analysis.outreach_generator import apply_modifier
+        with st.spinner("Applying edit..."):
+            new_body = apply_modifier(edited_body, modifier_key)
+        result["email_body"] = new_body
+        st.session_state[f"outreach_result_{lead.id}"] = result
+        st.rerun()
+
+    with qe1:
+        if st.button("✂️ Make Shorter", use_container_width=True, key=f"short_{lead.id}"):
+            _apply_modifier_action("make_shorter")
+    with qe2:
+        if st.button("🎩 More Professional", use_container_width=True, key=f"prof_{lead.id}"):
+            _apply_modifier_action("make_professional")
+    with qe3:
+        if st.button("😊 More Friendly", use_container_width=True, key=f"friend_{lead.id}"):
+            _apply_modifier_action("make_friendly")
+    with qe4:
+        if st.button("💪 Stronger CTA", use_container_width=True, key=f"cta_btn_{lead.id}"):
+            _apply_modifier_action("stronger_cta")
+
+    # ── Regenerate & Approve Row ─────────────────
+    st.markdown("")
+    btn_reg, btn_approve = st.columns([1, 1])
+
+    with btn_reg:
+        if st.button("🔄 Regenerate Email", use_container_width=True, key=f"regen_{lead.id}"):
+            from modules.analysis.outreach_generator import generate_outreach
+            from modules.database.repositories import OutreachMessageRepository
+            with st.spinner("Regenerating..."):
+                new_result = generate_outreach(
+                    report=report,
+                    lead=lead,
+                    email_type=st.session_state.get(f"et_{lead.id}", "Cold Outreach"),
+                    tone=st.session_state.get(f"tone_{lead.id}", "Professional"),
+                    length=st.session_state.get(f"len_{lead.id}", "Short").split(" ")[0],
+                    cta_goal=st.session_state.get(f"cta_{lead.id}", "Get Reply"),
+                    service_focus=st.session_state.get(f"svc_{lead.id}", "Auto (from report)"),
+                )
+            if "error" not in new_result:
+                # Save immediately to DB to overwrite cached legacy emails
+                outreach_repo = OutreachMessageRepository(db)
+                new_msg = outreach_repo.create(
+                    lead_id=lead.id,
+                    report_id=report.id,
+                    email_type=st.session_state.get(f"et_{lead.id}", "Cold Outreach"),
+                    tone=st.session_state.get(f"tone_{lead.id}", "Professional"),
+                    length=st.session_state.get(f"len_{lead.id}", "Short").split(" ")[0],
+                    cta_goal=st.session_state.get(f"cta_{lead.id}", "Get Reply"),
+                    service_focus=st.session_state.get(f"svc_{lead.id}", "Auto (from report)"),
+                    subject_lines=new_result.get("subject_lines", []),
+                    email_body=new_result.get("email_body", ""),
+                    whatsapp_message="",
+                    linkedin_message="",
+                    follow_up_1="",
+                    follow_up_2="",
+                )
+                new_result["_db_id"] = new_msg.id
+                
+                st.session_state[f"outreach_result_{lead.id}"] = new_result
+                st.success("✅ Email regenerated and saved to database successfully!")
+                st.rerun()
+            else:
+                st.error(new_result.get("error"))
+
+    with btn_approve:
+        if st.button(
+            "✅ Approve & Save",
+            type="primary",
+            use_container_width=True,
+            key=f"approve_{lead.id}",
+        ):
+            from modules.database.repositories import OutreachMessageRepository, LeadRepository
+            try:
+                # Mark outreach as approved
+                db_id = result.get("_db_id")
+                if db_id:
+                    OutreachMessageRepository(db).approve(db_id)
+                    
+                # Create CRM Activity
+                from modules.database.repositories import CRMActivityRepository
+                from modules.database.models import get_or_create_default_user
+                user = get_or_create_default_user(db)
+                CRMActivityRepository(db).create(
+                    lead_id=lead.id,
+                    campaign_id=lead.campaign_id,
+                    activity_type="outreach_approved",
+                    description=f"Subject: {selected_subject}\n\nBody Summary: {edited_body[:100]}..."
+                )
+
+                # Update lead status
+                LeadRepository(db).update_status(lead.id, "EMAIL_GENERATED")
+                st.success("✅ Email approved and saved!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to save: {e}")
+
+    st.markdown("---")
+
+    st.markdown("---")
