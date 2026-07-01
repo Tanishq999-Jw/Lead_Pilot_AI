@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Dict, Any
 from modules.dork_optimizer.constants import TARGET_SERVICES
 
@@ -57,15 +58,20 @@ class TrendAnalyzer:
             
             # 2. Match Geography
             matched_geo = {"country": "Global", "state": None, "region": None}
-            for keyword, geo_data in GEOGRAPHIES.items():
-                if keyword.lower() in text_pool:
-                    matched_geo = geo_data.copy()
+            for keyword, geo_data in sorted(GEOGRAPHIES.items(), key=lambda kv: -len(kv[0])):
+                pattern = r"\b" + re.escape(keyword.lower()) + r"\b"
+                if re.search(pattern, text_pool):
                     break
             
             # Allow manual config overrides
             if config.get("country"): matched_geo["country"] = config["country"]
             if config.get("state"): matched_geo["state"] = config["state"]
-            if config.get("region"): matched_geo["region"] = config["region"]
+            if config.get("region"):
+                matched_geo["region"] = config["region"]
+            
+            # Ensure region fallback when country is set but region is blank
+            if config.get("country") and not matched_geo["region"]:
+                matched_geo["region"] = config.get("region") or matched_geo.get("state") or config.get("country")
             
             # 3. Match Target Service
             matched_service = None

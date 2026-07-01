@@ -28,14 +28,27 @@ def render_settings():
         if GROQ_API_KEY and GROQ_API_KEY not in ("", "your_groq_api_key_here"):
             try:
                 from modules.ai.ai_client import AIClient
+                from utils.logging_utils import get_logger
+                logger = get_logger(__name__)
+                
                 client = AIClient()
-                health = client.health_check()
-                if health.get("status") == "success":
-                    st.success("✅ Groq AI")
+                
+                # Check if groq_client is initialized
+                if not client.groq_client:
+                    st.error("❌ Groq AI (Client not initialized)")
+                    logger.error("Groq client failed to initialize")
                 else:
-                    st.warning(f"⚠️ Groq AI: {health.get('message', 'Failed')}")
-            except:
-                st.warning("⚠️ Groq AI")
+                    health = client.health_check()
+                    if health.get("status") == "success":
+                        st.success("✅ Groq AI")
+                    else:
+                        error_msg = health.get('message', 'Failed')
+                        st.warning(f"⚠️ Groq AI: {error_msg}")
+                        logger.warning(f"Groq health check failed: {error_msg}")
+            except Exception as e:
+                import traceback
+                st.error("❌ Groq AI")
+                logger.error(f"Groq health check exception: {str(e)}\n{traceback.format_exc()}")
         else:
             st.error("❌ Groq AI")
 

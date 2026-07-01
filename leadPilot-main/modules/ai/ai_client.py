@@ -32,8 +32,13 @@ class AIClient:
             try:
                 # Set max_retries=2 so Groq SDK automatically handles 429 rate limits with exponential backoff
                 self.groq_client = Groq(api_key=self.groq_api_key, max_retries=2)
+                logger.info(f"✓ Groq client initialized successfully with model: {self.groq_model}")
             except Exception as e:
                 logger.error(f"Failed to initialize Groq client: {e}")
+        elif _GROQ_UNAVAILABLE:
+            logger.warning("Groq marked as unavailable globally due to previous 401 error")
+        else:
+            logger.warning("Groq API key not configured")
 
     def health_check(self) -> dict:
         """
@@ -41,19 +46,26 @@ class AIClient:
         Returns a dict with status and message.
         """
         if not self.groq_client:
-            return {"status": "error", "message": "Groq API key not configured"}
+            msg = "Groq client not initialized"
+            logger.error(msg)
+            return {"status": "error", "message": msg}
         try:
+            logger.info(f"Health check: Testing Groq connection with model {self.groq_model}")
             # Send a tiny prompt to verify connectivity and API key validity
-            self.groq_client.chat.completions.create(
+            response = self.groq_client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": "ping"}],
                 max_tokens=5
             )
+            logger.info("✓ Groq health check passed")
             return {"status": "success", "message": "Connected successfully"}
         except Exception as e:
             error_str = str(e).lower()
+            logger.error(f"Groq health check failed: {str(e)}")
             if "401" in error_str or "unauthorized" in error_str or "invalid" in error_str:
-                return {"status": "error", "message": "Invalid Groq API key (401 Unauthorized)"}
+                msg = "Invalid Groq API key (401 Unauthorized)"
+                logger.error(msg)
+                return {"status": "error", "message": msg}
             return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
     def _safe_json_parse(self, content: str) -> dict:
