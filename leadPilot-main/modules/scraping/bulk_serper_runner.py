@@ -460,7 +460,7 @@ def run_bulk_serper_scraping(
                 logger.info(f"Target count reached: {target_count}")
                 break
 
-            results = fetch_serper_results(query, page=page)
+            results = fetch_serper_results(query, page=page, location=location)
 
             if not results:
                 consecutive_empty_pages += 1

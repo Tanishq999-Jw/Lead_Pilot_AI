@@ -5,8 +5,36 @@ from config.settings import SERPER_API_KEY
 
 # Set up logging
 logger = logging.getLogger(__name__)
+# this code will set the SERP to the location of the user want Leads from, if not specified, it will default to India (in)
+def infer_serper_gl(location: str = "") -> str:
+    """Infer the Serper `gl` region code from the target location."""
+    if not location:
+        return "in"
 
-def fetch_serper_results(query: str, page: int = 1, num: int = 10) -> List[Dict]:
+    text = location.lower()
+    mapping = {
+        "gb": ["uk", "united kingdom", "england", "britain", "scotland", "wales", "northern ireland", "london", "manchester", "edinburgh", "glasgow"],
+        "us": ["us", "usa", "united states", "america", "new york", "california", "texas", "florida", "chicago", "seattle"],
+        "in": ["india", "indian", "delhi", "mumbai", "bangalore", "bengaluru", "hyderabad", "chennai", "pune"],
+        "ca": ["canada", "toronto", "vancouver", "montreal", "ottawa"],
+        "au": ["australia", "sydney", "melbourne", "brisbane", "perth"],
+        "de": ["germany", "deutschland", "berlin", "munich", "hamburg", "frankfurt"],
+        "fr": ["france", "paris", "lyon", "marseille"],
+        "nl": ["netherlands", "amsterdam", "rotterdam"],
+        "it": ["italy", "rome", "milan"],
+        "es": ["spain", "madrid", "barcelona"],
+        "sg": ["singapore"],
+        "ae": ["uae", "united arab emirates", "dubai", "abu dhabi"]
+    }
+
+    for code, keywords in mapping.items():
+        if any(keyword in text for keyword in keywords):
+            return code
+
+    return "in"
+
+
+def fetch_serper_results(query: str, page: int = 1, num: int = 10, location: str = "") -> List[Dict]:
     """
     Fetches Google SERP results from Serper.dev API.
     """
@@ -25,7 +53,7 @@ def fetch_serper_results(query: str, page: int = 1, num: int = 10) -> List[Dict]
         "q": query,
         "page": page,
         "num": num,
-        "gl": "in",
+        "gl": infer_serper_gl(location),
         "hl": "en"
     }
 
