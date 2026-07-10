@@ -83,6 +83,7 @@ class NewsFetcher:
         """
         encoded_query = urllib.parse.quote(query)
         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+        # hl=en&gl=<COUNTRY_CODE>&ceid=<COUNTRY_CODE>:en
         
         try:
             import feedparser

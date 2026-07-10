@@ -63,6 +63,7 @@ COUNTRY_DIRECTORIES = {
 
 # Country TLD mapping for site searches
 COUNTRY_TLDS = {
+    # This is getting used in manual and auto dork generator to get the country tld for the site search. If not found, default to "com".
     "IN": "in",
     "India": "in",
     "US": "com",

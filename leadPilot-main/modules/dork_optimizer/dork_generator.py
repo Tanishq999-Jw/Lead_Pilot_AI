@@ -11,10 +11,20 @@ class DorkGenerator:
     def __init__(self):
         self.scorer = DorkScorer()
 
-    def _get_country_tld(self, country: str) -> str:
+    def _lookup_country_value(self, mapping: Dict[str, Any], country: str, default: Any) -> Any:
         if not country:
-            return "com"
-        return COUNTRY_TLDS.get(country, COUNTRY_TLDS.get(country.upper(), "com"))
+            return default
+
+        normalized_country = country.strip().casefold()
+
+        for key, value in mapping.items():
+            if key == country or key.casefold() == normalized_country:
+                return value
+
+        return default
+
+    def _get_country_tld(self, country: str) -> str:
+        return self._lookup_country_value(COUNTRY_TLDS, country, "com")
 
     def _compile_dork_exclusions(self, country: str, exclude_directories: bool, exclude_jobs_blogs: bool) -> List[str]:
         exclusions = []
@@ -22,7 +32,7 @@ class DorkGenerator:
         # 1. Directory exclusions
         if exclude_directories and country:
             # Match directly or by upper-case key
-            direct_excl = COUNTRY_DIRECTORIES.get(country) or COUNTRY_DIRECTORIES.get(country.upper())
+            direct_excl = self._lookup_country_value(COUNTRY_DIRECTORIES, country, None)
             if direct_excl:
                 exclusions.extend(direct_excl)
             else:
