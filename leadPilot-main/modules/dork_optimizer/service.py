@@ -228,7 +228,7 @@ class DorkOptimizerService:
         self.db.commit()
         return saved
 
-    def send_dorks_to_scraper(self, dork_ids: list, campaign_id: str, platform: str = "serper_bulk") -> dict:
+    def send_dorks_to_scraper(self, dork_ids: list, campaign_id: str, platform: str = "serper_bulk", location_override: str = None) -> dict:
         """
         Core Connection Flow: Dork Optimizer -> Scraping Jobs -> Leads
         Creates a pending ScrapingJob for selected dorks.
@@ -251,6 +251,8 @@ class DorkOptimizerService:
             dork_queries.append(d.dork)
             d.status = "scraped"
             
+        job_location = location_override or campaign.location or "Global"
+
         # 3. Create single pending ScrapingJob
         # Store dork queries in raw_queries (JSON) so scraper can read them.
         # Use campaign name as category for clean UI display.
@@ -258,7 +260,7 @@ class DorkOptimizerService:
             campaign_id=campaign_id,
             platform=platform,
             category=campaign.campaign_name,
-            location=campaign.location or "Global",
+            location=job_location,
             raw_queries=dork_queries,
             status="PENDING",
             total_scraped=0,

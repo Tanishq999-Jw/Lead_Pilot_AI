@@ -257,7 +257,7 @@ def render_dork_optimizer():
                 m_service = st.selectbox("Pitch Target Service", TARGET_SERVICES, index=1, key="m_service")
                 m_inc_kw = st.text_input("Must Include Keywords (comma-separated)", "", key="m_inc_kw")
                 m_exc_kw = st.text_input("Must Exclude Keywords (comma-separated)", "", key="m_exc_kw")
-                m_dork_count = st.slider("Number of Dorks", min_value=1, max_value=30, value=10, key="m_dork_count")
+                m_dork_count = st.slider("Number of Dorks", min_value=1, max_value=50, value=10, key="m_dork_count")
                 
             m_dork_types = st.multiselect(
                 "Filter Dork Query Types",
@@ -354,7 +354,7 @@ def render_dork_optimizer():
                         m_selected_camp = st.selectbox(
                             "Select Scraper Campaign",
                             options=[c.id for c in campaigns],
-                            format_func=lambda x: next(c.campaign_name for c in campaigns if c.id == x),
+                            format_func=lambda x: next(f"{c.campaign_name} | {c.location}" for c in campaigns if c.id == x),
                             index=default_index,
                             key="manual_target_camp"
                         )
@@ -369,13 +369,13 @@ def render_dork_optimizer():
                                     st.warning("Please select at least one dork query.")
                                 else:
                                     with st.spinner("Pushing job to database worker..."):
-                                        m_res = service.send_dorks_to_scraper(selected_m_dork_ids, m_selected_camp)
+                                        m_res = service.send_dorks_to_scraper(selected_m_dork_ids, m_selected_camp, location_override=m_country)
                                         st.success(f"🚀 Scraping Job {m_res['job_id']} queued! The background worker will pick it up automatically within 5 seconds. Leads will automatically flow to CRM and MailForge.")
                         with sub_c2:
                             if st.button("Send All to Scraper", key="send_all_scraper_btn", use_container_width=True, type="secondary"):
                                 all_dork_ids = [d.id for d in manual_dorks]
                                 with st.spinner("Pushing all queries to scraper..."):
-                                    m_res = service.send_dorks_to_scraper(all_dork_ids, m_selected_camp)
+                                    m_res = service.send_dorks_to_scraper(all_dork_ids, m_selected_camp, location_override=m_country)
                                     st.success(f"🚀 Scraping Job {m_res['job_id']} queued! The background worker will pick it up automatically within 5 seconds. Leads will automatically flow to CRM and MailForge.")
                     else:
                         st.info("No campaigns exist. Create one to continue.")
