@@ -95,7 +95,7 @@ def render_dork_optimizer():
                 ac1, ac2 = st.columns(2)
                 with ac1:
                     num_opportunities = st.slider("Max Opportunities", min_value=1, max_value=15, value=5)
-                    dorks_per_opportunity = st.slider("Dorks per Opportunity", min_value=1, max_value=10, value=5)
+                    dorks_per_opportunity = st.slider("Dorks per Opportunity", min_value=1, max_value=60, value=5)
                 with ac2:
                     exclude_directories = st.toggle("Exclude directories (Yelp, Justdial, Bayut, etc.)", value=True)
                     exclude_jobs_blogs = st.toggle("Exclude career postings, news, blogs, and PDFs", value=True)
@@ -257,7 +257,7 @@ def render_dork_optimizer():
                 m_service = st.selectbox("Pitch Target Service", TARGET_SERVICES, index=1, key="m_service")
                 m_inc_kw = st.text_input("Must Include Keywords (comma-separated)", "", key="m_inc_kw")
                 m_exc_kw = st.text_input("Must Exclude Keywords (comma-separated)", "", key="m_exc_kw")
-                m_dork_count = st.slider("Number of Dorks", min_value=1, max_value=50, value=10, key="m_dork_count")
+                m_dork_count = st.slider("Number of Dorks", min_value=1, max_value=60, value=10, key="m_dork_count")
                 
             m_dork_types = st.multiselect(
                 "Filter Dork Query Types",
