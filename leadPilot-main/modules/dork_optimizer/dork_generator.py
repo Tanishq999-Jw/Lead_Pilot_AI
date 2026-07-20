@@ -181,9 +181,9 @@ def generate_manual_dorks(business: str, city: str = "", country: str = "") -> L
     # ── Group 3: site:.com queries (dot-com hardcoded) ───────────────────────────
     raw_dorks.extend([
         f'site:.com "{business}" "{country}"',
-        f'site:.com "{business}" Contact',
-        f'site:.com "{business}" Address',
-        f'site:.com "{business}" ("Email" OR "Phone")',
+        f'site:.com "{business}" "{country}" Contact',
+        f'site:.com "{business}" "{country}" Address',
+        f'site:.com "{business}" "{country}" ("Email" OR "Phone")',
     ])
 
     # ── Group 4: inurl / intitle queries ─────────────────────────────────────────
