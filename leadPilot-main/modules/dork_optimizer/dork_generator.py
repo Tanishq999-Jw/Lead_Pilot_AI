@@ -135,99 +135,77 @@ def generate_manual_dorks(business: str, city: str = "", country: str = "") -> L
     # City-based templates (lines marked <- CITY) are skipped when city == ""
     # to avoid generating malformed queries like "dentists" "" "UK".
 
+    city_str = f' "{city}"' if city else ""
+
     raw_dorks: list[str] = []
 
     # ── Group 1: Plain keyword queries ───────────────────────────────────────────
-    if city:  # <- CITY
-        raw_dorks.append(f'"{business}" "{city}" "{country}"')
-
     raw_dorks.extend([
-        f'"{business}" "{country}"',
-    ])
-
-    if city:  # <- CITY
-        raw_dorks.append(f'"{business}" "{city}"')
-
-    raw_dorks.extend([
-        f'"{business}" "{country}" Official',
-        f'"{business}" "{country}" Company',
-        f'"{business}" "{country}" Ltd',
-        f'"{business}" "{country}" LLC',
-        f'"{business}" "{country}" Inc',
-        f'"{business}" "{country}" (contact OR "contact us")',
-        f'"{business}" "{country}" ("Email" OR "E-mail")',
-        f'"{business}" "{country}" ("Phone" OR "Tel")',
-        f'"{business}" "{country}" Address',
-        f'"{business}" "{country}" "Head Office"',
-        f'"{business}" "{country}" "Corporate Office"',
+        f'"{business}"{city_str} "{country}"',
+        f'"{business}"{city_str} "{country}" Official',
+        f'"{business}"{city_str} "{country}" Company',
+        f'"{business}"{city_str} "{country}" Ltd',
+        f'"{business}"{city_str} "{country}" LLC',
+        f'"{business}"{city_str} "{country}" Inc',
+        f'"{business}"{city_str} "{country}" (contact OR "contact us")',
+        f'"{business}"{city_str} "{country}" ("Email" OR "E-mail")',
+        f'"{business}"{city_str} "{country}" ("Phone" OR "Tel")',
+        f'"{business}"{city_str} "{country}" Address',
+        f'"{business}"{city_str} "{country}" "Head Office"',
+        f'"{business}"{city_str} "{country}" "Corporate Office"',
     ])
 
     # ── Group 2: site:{tld} queries ──────────────────────────────────────────────
     raw_dorks.extend([
-        f'site:{tld} "{business}" "{country}"',
-    ])
-
-    if city:  # <- CITY
-        raw_dorks.append(f'site:{tld} "{business}" "{city}"')
-
-    raw_dorks.extend([
-        f'site:{tld} "{business}" Official',
-        f'site:{tld} "{business}" Company',
-        f'site:{tld} "{business}" Contact',
-        f'site:{tld} "{business}" Address',
-        f'site:{tld} "{business}" ("Email" OR "Phone")',
+        f'site:{tld} "{business}"{city_str} "{country}"',
+        f'site:{tld} "{business}"{city_str} Official',
+        f'site:{tld} "{business}"{city_str} Company',
+        f'site:{tld} "{business}"{city_str} Contact',
+        f'site:{tld} "{business}"{city_str} Address',
+        f'site:{tld} "{business}"{city_str} ("Email" OR "Phone")',
     ])
 
     # ── Group 3: site:.com queries (dot-com hardcoded) ───────────────────────────
     raw_dorks.extend([
-        f'site:.com "{business}" "{country}"',
-        f'site:.com "{business}" "{country}" Contact',
-        f'site:.com "{business}" "{country}" Address',
-        f'site:.com "{business}" "{country}" ("Email" OR "Phone")',
+        f'site:.com "{business}"{city_str} "{country}"',
+        f'site:.com "{business}"{city_str} "{country}" Contact',
+        f'site:.com "{business}"{city_str} "{country}" Address',
+        f'site:.com "{business}"{city_str} "{country}" ("Email" OR "Phone")',
     ])
 
     # ── Group 4: inurl / intitle queries ─────────────────────────────────────────
     raw_dorks.extend([
-        f'site:{tld} inurl:contact "{business}"',
-        f'site:{tld} inurl:contact-us "{business}"',
-        f'site:{tld} inurl:about "{business}"',
-        f'site:{tld} intitle:Contact "{business}"',
-        f'site:{tld} intitle:"Contact Us" "{business}"',
-        f'site:{tld} intitle:"About Us" "{business}"',
-        f'inurl:contact "{business}" "{country}"',
-        f'intitle:Contact "{business}" "{country}"',
+        f'site:{tld} inurl:contact "{business}"{city_str}',
+        f'site:{tld} inurl:contact-us "{business}"{city_str}',
+        f'site:{tld} inurl:about "{business}"{city_str}',
+        f'site:{tld} intitle:Contact "{business}"{city_str}',
+        f'site:{tld} intitle:"Contact Us" "{business}"{city_str}',
+        f'site:{tld} intitle:"About Us" "{business}"{city_str}',
+        f'inurl:contact "{business}"{city_str} "{country}"',
+        f'intitle:Contact "{business}"{city_str} "{country}"',
     ])
 
     # ── Group 5: Email address patterns ──────────────────────────────────────────
     raw_dorks.extend([
-        f'site:{tld} "{business}" info@',
-        f'site:{tld} "{business}" contact@',
-        f'site:{tld} "{business}" sales@',
-        f'site:{tld} "{business}" support@',
-        f'site:{tld} "{business}" mailto:',
+        f'site:{tld} "{business}"{city_str} info@',
+        f'site:{tld} "{business}"{city_str} contact@',
+        f'site:{tld} "{business}"{city_str} sales@',
+        f'site:{tld} "{business}"{city_str} support@',
+        f'site:{tld} "{business}"{city_str} mailto:',
     ])
 
     # ── Group 6: Phone patterns ───────────────────────────────────────────────────
     raw_dorks.extend([
-        f'site:{tld} "{business}" Phone',
-        f'site:{tld} "{business}" Tel',
-        f'site:{tld} "{business}" Telephone',
+        f'site:{tld} "{business}"{city_str} Phone',
+        f'site:{tld} "{business}"{city_str} Tel',
+        f'site:{tld} "{business}"{city_str} Telephone',
     ])
 
     # ── Group 7: Social platforms ─────────────────────────────────────────────────
     raw_dorks.extend([
-        f'site:facebook.com "{business}" "{country}"',
+        f'site:facebook.com "{business}"{city_str} "{country}"',
+        f'site:linkedin.com/company "{business}"{city_str} "{country}"',
     ])
-
-    if city:  # <- CITY
-        raw_dorks.append(f'site:facebook.com "{business}" "{city}"')
-
-    raw_dorks.extend([
-        f'site:linkedin.com/company "{business}" "{country}"',
-    ])
-
-    if city:  # <- CITY
-        raw_dorks.append(f'site:linkedin.com/company "{business}" "{city}"')
 
     # ── Append exclusions to every dork ──────────────────────────────────────────
     dorks_with_exclusions = [d + excl for d in raw_dorks]
